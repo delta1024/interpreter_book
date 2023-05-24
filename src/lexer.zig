@@ -14,6 +14,8 @@ const TokenType = enum {
     plus,
     minus,
     bang,
+    eq,
+    notEq,
     asterisk,
     slash,
     lt,
@@ -47,6 +49,8 @@ const Token = union(TokenType) {
     plus,
     minus,
     bang,
+    eq, 
+    notEq,
     asterisk,
     slash,
     lt,
@@ -66,97 +70,121 @@ const Token = union(TokenType) {
     Return,
 };
 
-pub const Lexer = struct {
-    input: []const u8,
-    position: usize = 0,
-    read_position: usize = 0,
-    ch: u8 = 0,
-    keywords: HashMap(Token),
-    pub fn init(allocator: Allocator, input: []const u8) !Lexer {
-        var keywords = HashMap(Token).init(allocator);
-        try keywords.put("fn", .function);
-        try keywords.put("let", .let);
-        try keywords.put("true", .true);
-        try keywords.put("false", .false);
-        try keywords.put("if", .If);
-        try keywords.put("else", .Else);
-        try keywords.put("return", .Return);
-        var n = Lexer{ .input = input, .keywords = keywords };
-        n.readChar();
-        return n;
+pub const Lexer = @This();
+input: []const u8,
+position: usize = 0,
+read_position: usize = 0,
+ch: u8 = 0,
+keywords: HashMap(Token),
+fn init_keywords(allocator: Allocator) !HashMap(Token) {
+    var keywords = HashMap(Token).init(allocator);
+    try keywords.put("fn", .function);
+    try keywords.put("let", .let);
+    try keywords.put("true", .true);
+    try keywords.put("false", .false);
+    try keywords.put("if", .If);
+    try keywords.put("else", .Else);
+    try keywords.put("return", .Return);
+    return keywords;
+}
+pub fn init(allocator: Allocator, input: []const u8) !Lexer {
+    var n = Lexer{ .input = input, .keywords = try init_keywords(allocator) };
+    n.readChar();
+    return n;
+}
+pub fn deinit(self: *Lexer) void {
+    self.keywords.deinit();
+}
+fn lookUpIdent(self: Lexer, ident: []const u8) Token {
+    if (self.keywords.get(ident)) |id| {
+        return id;
     }
-    fn lookUpIdent(self: Lexer, ident: []const u8) Token {
-        if (self.keywords.get(ident)) |id| {
-            return id;
-        }
-        return .{ .ident = ident };
+    return .{ .ident = ident };
+}
+fn readChar(self: *Lexer) void {
+    if (self.read_position >= self.input.len) {
+        self.ch = 0;
+    } else {
+        self.ch = self.input[self.read_position];
     }
-    fn readChar(self: *Lexer) void {
-        if (self.read_position >= self.input.len) {
-            self.ch = 0;
+    self.position = self.read_position;
+    self.read_position += 1;
+}
+fn peekChar(self: *const Lexer) ?u8 {
+    if (self.read_position >= self.input.len) {
+        return null;
+    } else {
+        return self.input[self.read_position];
+    }
+}
+fn isLetter(ch: u8) bool {
+    return 'a' <= ch and ch <= 'z' or 'A' <= ch and ch <= 'Z' or ch == '_';
+}
+fn readIdentifier(self: *Lexer) []const u8 {
+    const position = self.position;
+    while (isLetter(self.ch)) : (self.readChar()) {}
+    return self.input[position..self.position];
+}
+fn skipWhitesace(self: *Lexer) void {
+    while (self.ch == ' ' or self.ch == '\t' or self.ch == '\n' or self.ch == '\r') : (self.readChar()) {}
+}
+fn isDigit(ch: u8) bool {
+    return '0' <= ch and ch <= '9';
+}
+fn readNumber(self: *Lexer) []const u8 {
+    const position = self.position;
+    while (isDigit(self.ch)) : (self.readChar()) {}
+    return self.input[position..self.position];
+}
+
+pub fn nextToken(self: *Lexer) Token {
+    var tok: Token = undefined;
+    self.skipWhitesace();
+    switch (self.ch) {
+        '=' => if (self.peekChar())|c| {
+            if (c == '=') {
+                self.readChar();
+                tok = .eq;
+            } else tok = .assign;
+        } else { tok = .assign; },
+        ';' => tok = .semicolon,
+        '(' => tok = .lparen,
+        ')' => tok = .rparen,
+        ',' => tok = .comma,
+        '+' => tok = .plus,
+        '-' => tok = .minus,
+        '!' => if (self.peekChar()) |c| {
+            if (c == '=') {
+                self.readChar();
+                tok = .notEq;
+            } else tok = .bang;
+        } else { tok = .bang; },
+        '/' => tok = .slash,
+        '*' => tok = .asterisk,
+        '<' => tok = .lt,
+        '>' => tok = .gt,
+        '{' => tok = .lbrace,
+        '}' => tok = .rbrace,
+        0 => tok = .eof,
+        else => if (isLetter(self.ch)) {
+            const id = self.readIdentifier();
+            tok = self.lookUpIdent(id);
+            return tok;
+        } else if (isDigit(self.ch)) {
+            const num = self.readNumber();
+            tok = .{ .int = num };
+            return tok;
         } else {
-            self.ch = self.input[self.read_position];
-        }
-        self.position = self.read_position;
-        self.read_position += 1;
+            tok = .illegal;
+        },
     }
-    fn isLetter(ch: u8) bool {
-        return 'a' <= ch and ch <= 'z' or 'A' <= ch and ch <= 'Z' or ch == '_';
-    }
-    fn readIdentifier(self: *Lexer) []const u8 {
-        const position = self.position;
-        while (isLetter(self.ch)) : (self.readChar()) {}
-        return self.input[position..self.position];
-    }
-    fn skipWhitesace(self: *Lexer) void {
-        while (self.ch == ' ' or self.ch == '\t' or self.ch == '\n' or self.ch == '\r') : (self.readChar()) {}
-    }
-    fn isDigit(ch: u8) bool {
-        return '0' <= ch and ch <= '9';
-    }
-    fn readNumber(self: *Lexer) []const u8 {
-        const position = self.position;
-        while (isDigit(self.ch)) : (self.readChar()) {}
-        return self.input[position..self.position];
-    }
+    self.readChar();
 
-    pub fn nextToken(self: *Lexer) Token {
-        var tok: Token = undefined;
-        self.skipWhitesace();
-        switch (self.ch) {
-            '=' => tok = .assign,
-            ';' => tok = .semicolon,
-            '(' => tok = .lparen,
-            ')' => tok = .rparen,
-            ',' => tok = .comma,
-            '+' => tok = .plus,
-            '-' => tok = .minus,
-            '!' => tok = .bang,
-            '/' => tok = .slash,
-            '*' => tok = .asterisk,
-            '<' => tok = .lt,
-            '>' => tok = .gt,
-            '{' => tok = .lbrace,
-            '}' => tok = .rbrace,
-            0 => tok = .eof,
-            else => if (isLetter(self.ch)) {
-                const id = self.readIdentifier();
-                tok = self.lookUpIdent(id);
-                return tok;
-            } else if (isDigit(self.ch)) {
-                const num = self.readNumber();
-                tok = .{ .int = num };
-                return tok;
-            } else {
-                tok = .illegal;
-            },
-        }
-        self.readChar();
-
-        return tok;
-    }
-};
+    return tok;
+}
 test "test_next_keyword" {
+    const mem = std.mem;
+    const testing = std.testing;
     const input =
         \\ let five = 5;
         \\ let ten = 10;
@@ -173,9 +201,12 @@ test "test_next_keyword" {
         \\ } else {
         \\     return false;
         \\ }
-    ;
+        \\
+        \\ 10 == 10;
+        \\ 10 != 9;
+        ;
 
-    const tests = [_]Token{
+        const tests = [_]Token{
         .let,
         .{ .ident = "five"[0..] },
         .assign,
@@ -241,25 +272,33 @@ test "test_next_keyword" {
         .false,
         .semicolon,
         .rbrace,
+        .{ .int = "10"[0..] },
+        .eq,
+        .{ .int = "10"[0..] },
+        .semicolon,
+        .{ .int = "10"[0..] },
+        .notEq,
+        .{ .int = "9"[0..] },
+        .semicolon,
         .eof,
     };
-    const allocator = std.testing.allocator;
-    var lexer = try Lexer.init(allocator, input[0..]);
-    defer lexer.keywords.deinit();
-    for (tests) |expected| {
-        const tok: Token = lexer.nextToken();
-        switch (expected) {
-            .ident, .int => |v| {
-                switch (tok) {
-                    .int, .ident => |v2| {
-                        const name = @tagName(expected);
-                        const tok_name = @tagName(tok);
-                        try std.testing.expect(std.mem.eql(u8, name, tok_name) and std.mem.eql(u8, v, v2));
-                    },
-                    else => try std.testing.expect(false),
-                }
-            },
-            else => try std.testing.expect(std.meta.eql(tok, expected)),
-        }
+const allocator = testing.allocator;
+var lexer = try Lexer.init(allocator, input[0..]);
+defer lexer.deinit();
+for (tests) |expected| {
+    const tok: Token = lexer.nextToken();
+    switch (expected) {
+        .ident, .int => |v| {
+            switch (tok) {
+                .int, .ident => |v2| {
+                    const name = @tagName(expected);
+                    const tok_name = @tagName(tok);
+                    try testing.expect(mem.eql(u8, name, tok_name) and mem.eql(u8, v, v2));
+                },
+                else => try testing.expect(false),
+            }
+        },
+        else => try testing.expect(std.meta.eql(tok, expected)),
     }
+}
 }
