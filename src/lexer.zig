@@ -30,6 +30,11 @@ const TokenType = enum {
     // Keywords
     function,
     let,
+    true,
+    false,
+    If,
+    Else,
+    Return,
 };
 
 // zig fmt: off
@@ -53,7 +58,12 @@ const Token = union(TokenType) {
     lbrace,
     rbrace,
     function,
-    let 
+    let ,
+    true,
+    false,
+    If,
+    Else,
+    Return,
 };
 
 pub const Lexer = struct {
@@ -63,9 +73,15 @@ pub const Lexer = struct {
     ch: u8 = 0,
     keywords: HashMap(Token),
     pub fn init(allocator: Allocator, input: []const u8) !Lexer {
-        var n = Lexer{ .input = input, .keywords = HashMap(Token).init(allocator) };
-        try n.keywords.put("fn", .function);
-        try n.keywords.put("let", .let);
+        var keywords = HashMap(Token).init(allocator);
+        try keywords.put("fn", .function);
+        try keywords.put("let", .let);
+        try keywords.put("true", .true);
+        try keywords.put("false", .false);
+        try keywords.put("if", .If);
+        try keywords.put("else", .Else);
+        try keywords.put("return", .Return);
+        var n = Lexer{ .input = input, .keywords = keywords };
         n.readChar();
         return n;
     }
@@ -151,6 +167,12 @@ test "test_next_keyword" {
         \\ let result = add(five, ten);
         \\ !-/*5;
         \\ 5 < 10 > 5;
+        \\
+        \\ if (5 < 10) {
+        \\     return true;
+        \\ } else {
+        \\     return false;
+        \\ }
     ;
 
     const tests = [_]Token{
@@ -202,6 +224,23 @@ test "test_next_keyword" {
         .gt,
         .{ .int = "5"[0..] },
         .semicolon,
+        .If,
+        .lparen,
+        .{ .int = "5"[0..] },
+        .lt,
+        .{ .int = "10"[0..] },
+        .rparen,
+        .lbrace,
+        .Return,
+        .true,
+        .semicolon,
+        .rbrace,
+        .Else,
+        .lbrace,
+        .Return,
+        .false,
+        .semicolon,
+        .rbrace,
         .eof,
     };
     const allocator = std.testing.allocator;
