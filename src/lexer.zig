@@ -68,6 +68,15 @@ const Token = union(TokenType) {
     If,
     Else,
     Return,
+    pub fn format(self: Token, comptime _: []const u8, _: std.fmt.FormatOptions, w: anytype) !void {
+        const name = @tagName(self);
+        switch (self) {
+            .ident, .int => |v| {
+                try w.print("{s}({s})", .{name, v});
+            },
+            else => try w.print("{s}",.{name})
+        }
+    }
 };
 
 pub const Lexer = @This();
