@@ -12,6 +12,12 @@ const TokenType = enum {
     // Operators
     assign,
     plus,
+    minus,
+    bang,
+    asterisk,
+    slash,
+    lt,
+    gt,
 
     // Delimiters
     comma,
@@ -26,7 +32,29 @@ const TokenType = enum {
     let,
 };
 
-const Token = union(TokenType) { illegal, eof, ident: []const u8, int: []const u8, assign, plus, comma, semicolon, lparen, rparen, lbrace, rbrace, function, let };
+// zig fmt: off
+const Token = union(TokenType) { 
+    illegal,
+    eof,
+    ident: []const u8,
+    int: []const u8,
+    assign,
+    plus,
+    minus,
+    bang,
+    asterisk,
+    slash,
+    lt,
+    gt,
+    comma,
+    semicolon,
+    lparen,
+    rparen,
+    lbrace,
+    rbrace,
+    function,
+    let 
+};
 
 pub const Lexer = struct {
     input: []const u8,
@@ -86,6 +114,12 @@ pub const Lexer = struct {
             ')' => tok = .rparen,
             ',' => tok = .comma,
             '+' => tok = .plus,
+            '-' => tok = .minus,
+            '!' => tok = .bang,
+            '/' => tok = .slash,
+            '*' => tok = .asterisk,
+            '<' => tok = .lt,
+            '>' => tok = .gt,
             '{' => tok = .lbrace,
             '}' => tok = .rbrace,
             0 => tok = .eof,
@@ -115,6 +149,8 @@ test "test_next_keyword" {
         \\ };
         \\
         \\ let result = add(five, ten);
+        \\ !-/*5;
+        \\ 5 < 10 > 5;
     ;
 
     const tests = [_]Token{
@@ -153,6 +189,18 @@ test "test_next_keyword" {
         .comma,
         .{ .ident = "ten"[0..] },
         .rparen,
+        .semicolon,
+        .bang,
+        .minus,
+        .slash,
+        .asterisk,
+        .{ .int = "5"[0..] },
+        .semicolon,
+        .{ .int = "5"[0..] },
+        .lt,
+        .{ .int = "10"[0..] },
+        .gt,
+        .{ .int = "5"[0..] },
         .semicolon,
         .eof,
     };
