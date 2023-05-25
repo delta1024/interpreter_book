@@ -192,7 +192,6 @@ pub fn nextToken(self: *Lexer) Token {
     return tok;
 }
 test "test_next_keyword" {
-    const mem = std.mem;
     const testing = std.testing;
     const input =
         \\ let five = 5;
@@ -296,18 +295,17 @@ var lexer = try Lexer.init(allocator, input[0..]);
 defer lexer.deinit();
 for (tests) |expected| {
     const tok: Token = lexer.nextToken();
-    switch (expected) {
-        .ident, .int => |v| {
-            switch (tok) {
-                .int, .ident => |v2| {
-                    const name = @tagName(expected);
-                    const tok_name = @tagName(tok);
-                    try testing.expect(mem.eql(u8, name, tok_name) and mem.eql(u8, v, v2));
-                },
-                else => try testing.expect(false),
-            }
-        },
-        else => try testing.expect(std.meta.eql(tok, expected)),
-    }
+  switch (expected) {
+      .ident, .int => |v| {
+          switch (tok) {
+              .int, .ident => |v2| {
+                  try testing.expectEqual(@as(TokenType, expected), @as(TokenType, tok));
+                  try testing.expectEqualStrings(v, v2);
+              },
+              else => try testing.expect(false),
+          }
+      },
+      else => try testing.expectEqual(@as(TokenType, expected), @as(TokenType, tok)),
+  }
 }
 }
