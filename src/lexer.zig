@@ -1,6 +1,6 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
-const HashMap = std.StringHashMap;
+const HashMap = std.ComptimeStringMap;
 const TokenType = enum {
     illegal,
     eof,
@@ -80,32 +80,18 @@ const Token = union(TokenType) {
 };
 
 pub const Lexer = @This();
+const KEYWORDS =  HashMap(Token, .{.{"fn", .function}, .{"let", .let}, .{"true",  .true}, .{"false",  .false}, .{"if",  .If}, .{"else",  .Else}, .{"return",  .Return}});
 input: []const u8,
 position: usize = 0,
 read_position: usize = 0,
 ch: u8 = 0,
-keywords: HashMap(Token),
-fn init_keywords(allocator: Allocator) !HashMap(Token) {
-    var keywords = HashMap(Token).init(allocator);
-    try keywords.put("fn", .function);
-    try keywords.put("let", .let);
-    try keywords.put("true", .true);
-    try keywords.put("false", .false);
-    try keywords.put("if", .If);
-    try keywords.put("else", .Else);
-    try keywords.put("return", .Return);
-    return keywords;
-}
-pub fn init(allocator: Allocator, input: []const u8) !Lexer {
-    var n = Lexer{ .input = input, .keywords = try init_keywords(allocator) };
+pub fn init( input: []const u8) Lexer {
+    var n = Lexer{ .input = input };
     n.readChar();
     return n;
 }
-pub fn deinit(self: *Lexer) void {
-    self.keywords.deinit();
-}
-fn lookUpIdent(self: Lexer, ident: []const u8) Token {
-    if (self.keywords.get(ident)) |id| {
+fn lookUpIdent(ident: []const u8) Token {
+    if (KEYWORDS.get(ident)) |id| {
         return id;
     }
     return .{ .ident = ident };
@@ -177,7 +163,7 @@ pub fn nextToken(self: *Lexer) Token {
         0 => tok = .eof,
         else => if (isLetter(self.ch)) {
             const id = self.readIdentifier();
-            tok = self.lookUpIdent(id);
+            tok = lookUpIdent(id);
             return tok;
         } else if (isDigit(self.ch)) {
             const num = self.readNumber();
@@ -290,9 +276,7 @@ test "test_next_keyword" {
         .semicolon,
         .eof,
     };
-const allocator = testing.allocator;
-var lexer = try Lexer.init(allocator, input[0..]);
-defer lexer.deinit();
+var lexer = Lexer.init(input[0..]);
 for (tests) |expected| {
     const tok: Token = lexer.nextToken();
   switch (expected) {
