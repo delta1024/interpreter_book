@@ -82,14 +82,14 @@ const Token = union(TokenType) {
 pub const Lexer = @This();
 const KEYWORDS =  HashMap(Token, .{.{"fn", .function}, .{"let", .let}, .{"true",  .true}, .{"false",  .false}, .{"if",  .If}, .{"else",  .Else}, .{"return",  .Return}});
 input: []const u8,
-position: usize = 0,
-read_position: usize = 0,
-ch: u8 = 0,
-pub fn init( input: []const u8) Lexer {
-    var n = Lexer{ .input = input };
-    n.readChar();
-    return n;
-}
+    position: usize = 0,
+    read_position: usize = 0,
+    ch: u8 = 0,
+    pub fn init( input: []const u8) Lexer {
+        var n = Lexer{ .input = input };
+        n.readChar();
+        return n;
+    }
 fn lookUpIdent(ident: []const u8) Token {
     if (KEYWORDS.get(ident)) |id| {
         return id;
@@ -133,46 +133,43 @@ fn readNumber(self: *Lexer) []const u8 {
 }
 
 pub fn nextToken(self: *Lexer) Token {
-    var tok: Token = undefined;
     self.skipWhitesace();
-    switch (self.ch) {
-        '=' => if (self.peekChar())|c| {
+    const tok: Token = switch (self.ch) {
+        '=' => if (self.peekChar())|c| blk: {
             if (c == '=') {
                 self.readChar();
-                tok = .eq;
-            } else tok = .assign;
-        } else { tok = .assign; },
-        ';' => tok = .semicolon,
-        '(' => tok = .lparen,
-        ')' => tok = .rparen,
-        ',' => tok = .comma,
-        '+' => tok = .plus,
-        '-' => tok = .minus,
-        '!' => if (self.peekChar()) |c| {
+                break :blk .eq;
+            } else break :blk .assign;
+        } else  .assign,
+        ';' => .semicolon,
+        '(' => .lparen,
+        ')' => .rparen,
+        ',' => .comma,
+        '+' => .plus,
+        '-' => .minus,
+        '!' => if (self.peekChar()) |c| blk: {
             if (c == '=') {
                 self.readChar();
-                tok = .notEq;
-            } else tok = .bang;
-        } else { tok = .bang; },
-        '/' => tok = .slash,
-        '*' => tok = .asterisk,
-        '<' => tok = .lt,
-        '>' => tok = .gt,
-        '{' => tok = .lbrace,
-        '}' => tok = .rbrace,
-        0 => tok = .eof,
-        else => if (isLetter(self.ch)) {
+                break :blk .notEq;
+            } else break :blk .bang;
+        } else .bang ,
+        '/' =>  .slash,
+        '*' =>  .asterisk,
+        '<' =>  .lt,
+        '>' =>  .gt,
+        '{' =>  .lbrace,
+        '}' =>  .rbrace,
+        0 =>  .eof,
+        'a'...'z' , 'A' ... 'Z', '_' => {
             const id = self.readIdentifier();
-            tok = lookUpIdent(id);
-            return tok;
-        } else if (isDigit(self.ch)) {
-            const num = self.readNumber();
-            tok = .{ .int = num };
-            return tok;
-        } else {
-            tok = .illegal;
+            return    lookUpIdent(id);
         },
-    }
+        '0'...'9' =>  {
+            const num = self.readNumber();
+            return  .{ .int = num };
+        },
+        else =>.illegal,
+    };
     self.readChar();
 
     return tok;
@@ -202,58 +199,58 @@ test "test_next_keyword" {
 
         const tests = [_]Token{
         .let,
-        .{ .ident = "five"[0..] },
+        .{ .ident = "five" },
         .assign,
-        .{ .int = "5"[0..] },
+        .{ .int = "5" },
         .semicolon,
         .let,
-        .{ .ident = "ten"[0..] },
+        .{ .ident = "ten" },
         .assign,
-        .{ .int = "10"[0..] },
+        .{ .int = "10" },
         .semicolon,
         .let,
-        .{ .ident = "add"[0..] },
+        .{ .ident = "add" },
         .assign,
         .function,
         .lparen,
-        .{ .ident = "x"[0..] },
+        .{ .ident = "x" },
         .comma,
-        .{ .ident = "y"[0..] },
+        .{ .ident = "y" },
         .rparen,
         .lbrace,
-        .{ .ident = "x"[0..] },
+        .{ .ident = "x" },
         .plus,
-        .{ .ident = "y"[0..] },
+        .{ .ident = "y" },
         .semicolon,
         .rbrace,
         .semicolon,
         .let,
-        .{ .ident = "result"[0..] },
+        .{ .ident = "result" },
         .assign,
-        .{ .ident = "add"[0..] },
+        .{ .ident = "add" },
         .lparen,
-        .{ .ident = "five"[0..] },
+        .{ .ident = "five" },
         .comma,
-        .{ .ident = "ten"[0..] },
+        .{ .ident = "ten" },
         .rparen,
         .semicolon,
         .bang,
         .minus,
         .slash,
         .asterisk,
-        .{ .int = "5"[0..] },
+        .{ .int = "5" },
         .semicolon,
-        .{ .int = "5"[0..] },
+        .{ .int = "5" },
         .lt,
-        .{ .int = "10"[0..] },
+        .{ .int = "10" },
         .gt,
-        .{ .int = "5"[0..] },
+        .{ .int = "5" },
         .semicolon,
         .If,
         .lparen,
-        .{ .int = "5"[0..] },
+        .{ .int = "5" },
         .lt,
-        .{ .int = "10"[0..] },
+        .{ .int = "10" },
         .rparen,
         .lbrace,
         .Return,
@@ -266,30 +263,30 @@ test "test_next_keyword" {
         .false,
         .semicolon,
         .rbrace,
-        .{ .int = "10"[0..] },
+        .{ .int = "10" },
         .eq,
-        .{ .int = "10"[0..] },
+        .{ .int = "10" },
         .semicolon,
-        .{ .int = "10"[0..] },
+        .{ .int = "10" },
         .notEq,
-        .{ .int = "9"[0..] },
+        .{ .int = "9" },
         .semicolon,
         .eof,
     };
 var lexer = Lexer.init(input[0..]);
 for (tests) |expected| {
     const tok: Token = lexer.nextToken();
-  switch (expected) {
-      .ident, .int => |v| {
-          switch (tok) {
-              .int, .ident => |v2| {
-                  try testing.expectEqual(@as(TokenType, expected), @as(TokenType, tok));
-                  try testing.expectEqualStrings(v, v2);
-              },
-              else => try testing.expect(false),
-          }
-      },
-      else => try testing.expectEqual(@as(TokenType, expected), @as(TokenType, tok)),
-  }
+    switch (expected) {
+        .ident, .int => |v| {
+            switch (tok) {
+                .int, .ident => |v2| {
+                    try testing.expectEqual(@as(TokenType, expected), @as(TokenType, tok));
+                    try testing.expectEqualStrings(v, v2);
+                },
+                else => try testing.expect(false),
+            }
+        },
+        else => try testing.expectEqual(@as(TokenType, expected), @as(TokenType, tok)),
+    }
 }
 }
