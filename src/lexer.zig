@@ -1,7 +1,7 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 const HashMap = std.ComptimeStringMap;
-const TokenType = enum {
+pub const TokenType = enum {
     illegal,
     eof,
 
@@ -40,7 +40,7 @@ const TokenType = enum {
 };
 
 // zig fmt: off
-const Token = union(TokenType) { 
+pub const Token = union(TokenType) { 
     illegal,
     eof,
     ident: []const u8,
