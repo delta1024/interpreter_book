@@ -33,13 +33,13 @@ pub fn parseProgram(self: *Parser) !ast.Program {
     return program;
 }
 const ParseError = error{ UnexpectedToken, UnknownToken, InvalideStatementToken };
-fn parseStatement(self: *Parser) !ast.Statement {
+fn parseStatement(self: *Parser) !*ast.Statement {
     switch (self.cur_token) {
         .let => return try self.parseLetStatement(),
         else => return error.InvalideStatementToken,
     }
 }
-fn parseLetStatement(self: *Parser) !ast.Statement {
+fn parseLetStatement(self: *Parser) !*ast.Statement {
     const token = self.cur_token;
 
     if (!self.expectPeek(.ident)) {
@@ -56,7 +56,9 @@ fn parseLetStatement(self: *Parser) !ast.Statement {
         self.nextToken();
     }
 
-    return .{ .let = .{ .token = token, .name = name, .value = undefined } };
+    var let = try self.allocator.create(ast.LetStatement);
+    let.* = .{ .token = token, .name = name, .value = undefined };
+    return let.statement();
 }
 fn expectPeek(self: *Parser, ident: Lexer.TokenType) bool {
     if (self.peekTokenIs(ident)) {
@@ -73,19 +75,12 @@ fn curTokenIs(self: *const Parser, ident: Lexer.TokenType) bool {
     return @as(Lexer.TokenType, self.cur_token) == ident;
 }
 const testing = std.testing;
-pub fn testLetStatement(s: *const ast.Statement, name: []const u8) !void {
-    try testing.expectEqual(@as(ast.StatementId, s.*), ast.StatementId.let);
-    switch (s.*) {
-        .let => |let| {
-            switch (let.name.token) {
-                .ident => |id| try testing.expectEqualStrings(id, name),
-                else => {
-                    std.log.warn("Invalid ident token", .{});
-                    try testing.expect(false);
-                },
-            }
-        },
-    }
+fn testLetStatement(s: *ast.Statement, name: []const u8) !void {
+    try testing.expectEqualStrings("let", s.statementNode());
+
+    var let_statement = @fieldParentPtr(ast.LetStatement, "class", s);
+
+    try testing.expectEqualStrings(let_statement.name.expression().getNode().tokenLiteral(), name);
 }
 test "let statements" {
     const input =
@@ -112,6 +107,7 @@ test "let statements" {
 
     for (tests) |tt, i| {
         const stmt = program.statements.items[i];
-        try testLetStatement(&stmt, tt.expected_identifier);
+        try testLetStatement(stmt, tt.expected_identifier);
+        stmt.destroy(std.testing.allocator);
     }
 }

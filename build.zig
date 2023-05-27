@@ -25,6 +25,10 @@ pub fn build(b: *std.build.Builder) void {
     const run_step = b.step("run", "Run the app");
     run_step.dependOn(&run_cmd.step);
 
+    const ast_tests = b.addTest("src/ast.zig");
+    ast_tests.setTarget(target);
+    ast_tests.setBuildMode(mode);
+
     const lexer_tests = b.addTest("src/lexer.zig");
     lexer_tests.setTarget(target);
     lexer_tests.setBuildMode(mode);
@@ -36,4 +40,5 @@ pub fn build(b: *std.build.Builder) void {
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&lexer_tests.step);
     test_step.dependOn(&parser_tests.step);
+    test_step.dependOn(&ast_tests.step);
 }
