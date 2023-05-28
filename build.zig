@@ -39,6 +39,6 @@ pub fn build(b: *std.build.Builder) void {
 
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&lexer_tests.step);
-    test_step.dependOn(&parser_tests.step);
     test_step.dependOn(&ast_tests.step);
+    test_step.dependOn(&parser_tests.step);
 }

@@ -4,21 +4,34 @@ const Token = Lexer.Token;
 const TokenType = Lexer.TokenType;
 const Array = std.ArrayList;
 const Allocator = std.mem.Allocator;
+fn VTable(comptime T: type) type {
+    return struct {
+        const Self = @This();
+        literal_fn: *const fn (*T) []const u8,
+        destroy_fn: *const fn (*T, Allocator) void,
+        pub fn init(literal: *const fn (*T) []const u8, destroy: *const fn (*T, Allocator) void) Self {
+            return .{
+                .literal_fn = literal,
+                .destroy_fn = destroy,
+            };
+        }
+    };
+}
 pub const Node = struct {
-    callback: *const fn (*Node) []const u8,
+    vtable: VTable(Node),
     pub fn tokenLiteral(self: *Node) []const u8 {
-        return self.callback(self);
+        return self.vtable.literal_fn(self);
+    }
+    pub fn destroy(self: *Node, allocator: Allocator) void {
+        self.vtable.destroy_fn(self, allocator);
     }
 };
 
 pub const Statement = struct {
-    node: Node = .{
-        .callback = tokenLiteral,
-    },
-    callback: *const fn (*Statement) []const u8,
-    destroy_fn: *const fn (*Statement, Allocator) void,
+    node: Node = .{ .vtable = VTable(Node).init(tokenLiteral, destroyNode) },
+    vtable: VTable(Statement),
     pub fn statementNode(self: *Statement) []const u8 {
-        return self.callback(self);
+        return self.vtable.literal_fn(self);
     }
     pub fn tokenLiteral(n: *Node) []const u8 {
         return @fieldParentPtr(Statement, "node", n).statementNode();
@@ -27,15 +40,18 @@ pub const Statement = struct {
         return &self.node;
     }
     pub fn destroy(self: *Statement, allocator: std.mem.Allocator) void {
-        self.destroy_fn(self, allocator);
+        self.vtable.destroy_fn(self, allocator);
+    }
+    pub fn destroyNode(s: *Node, allocator: Allocator) void {
+        const self = @fieldParentPtr(Statement, "node", s);
+        self.vtable.destroy_fn(self, allocator);
     }
 };
 pub const Expression = struct {
-    node: Node = .{ .callback = tokenLiteral },
-    callback: *const fn (*Expression) []const u8,
-    destroy_fn: *const fn (*Expression, Allocator) void,
+    node: Node = .{ .vtable = VTable(Node).init(tokenLiteral, destroyNode) },
+    vtable: VTable(Expression),
     pub fn expressionNode(self: *Expression) []const u8 {
-        return self.callback(self);
+        return self.vtable.literal_fn(self);
     }
     pub fn tokenLiteral(n: *Node) []const u8 {
         return @fieldParentPtr(Expression, "node", n).expressionNode();
@@ -44,7 +60,11 @@ pub const Expression = struct {
         return &self.node;
     }
     pub fn destroy(self: *Expression, allocator: Allocator) void {
-        self.destroy_fn(self, allocator);
+        self.vtable.destroy_fn(self, allocator);
+    }
+    pub fn destroyNode(s: *Node, allocator: Allocator) void {
+        const self = @fieldParentPtr(Expression, "node", s);
+        self.vtable.destroy_fn(self, allocator);
     }
 };
 pub const Program = struct {
@@ -59,7 +79,10 @@ pub const Program = struct {
             return "";
         }
     }
-    pub fn deinit(self: *Program) void {
+    pub fn deinit(self: *Program, allocator: Allocator) void {
+        for (self.statements.items) |s| {
+            s.destroy(allocator);
+        }
         self.statements.deinit();
     }
 };
@@ -67,10 +90,7 @@ pub const LetStatement = struct {
     token: Token,
     name: Identifier,
     value: *Expression,
-    class: Statement = .{
-        .callback = getTokenLiteral,
-        .destroy_fn = destroy,
-    },
+    class: Statement = .{ .vtable = VTable(Statement).init(getTokenLiteral, destroy) },
     pub fn statement(self: *LetStatement) *Statement {
         return &self.class;
     }
@@ -79,12 +99,13 @@ pub const LetStatement = struct {
     }
     pub fn destroy(s: *Statement, allocator: Allocator) void {
         var self = @fieldParentPtr(LetStatement, "class", s);
+        // self.value.destroy(allocator);
         allocator.destroy(self);
     }
 };
 pub const Identifier = struct {
     token: Token,
-    class: Expression = .{ .callback = getTokenLiteral, .destroy_fn = destroy },
+    class: Expression = .{ .vtable = VTable(Expression).init(getTokenLiteral, destroy) },
     pub fn expression(self: *Identifier) *Expression {
         return &self.class;
     }
@@ -102,6 +123,19 @@ pub const Identifier = struct {
     }
 };
 
+pub const ReturnStatement = struct {
+    token: Token,
+    return_value: *Expression,
+    class: Statement = .{ .vtable = VTable(Statement).init(getTokenLiteral, destory) },
+    pub fn getTokenLiteral(s: *Statement) []const u8 {
+        return @tagName(@fieldParentPtr(ReturnStatement, "class", s).token);
+    }
+    pub fn destory(s: *Statement, allocator: Allocator) void {
+        var self = @fieldParentPtr(ReturnStatement, "class", s);
+        // self.return_value.destory(allocator);
+        allocator.destroy(self);
+    }
+};
 const testing = std.testing;
 test "let statement statementNode()" {
     var l = LetStatement{ .token = .let, .value = undefined, .name = undefined };
@@ -110,13 +144,13 @@ test "let statement statementNode()" {
 }
 test "interfaces" {
     const TestTree = struct {
-        const TestTree = @This();
+        const Self = @This();
         str: []const u8 = "hello world",
-        statement: Statement = .{ .callback = helloWorld, .destroy_fn = undefined },
+        statement: Statement = .{ .vtable = VTable(Statement).init(helloWorld, undefined) },
         fn helloWorld(s: *Statement) []const u8 {
-            return @fieldParentPtr(TestTree, "statement", s).str;
+            return @fieldParentPtr(Self, "statement", s).str;
         }
-        fn statementExpr(self: *TestTree) *Statement {
+        fn statementExpr(self: *Self) *Statement {
             return &self.statement;
         }
     };
